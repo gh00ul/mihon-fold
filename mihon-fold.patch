@@ -1,0 +1,82 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index cdf2c2c..499ebca 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -89,7 +89,7 @@ android {
+         create("foss") {
+             initWith(release)
+ 
+-            applicationIdSuffix = ".foss"
++            applicationIdSuffix = ".fold"
+ 
+             matchingFallbacks.addAll(commonMatchingFallbacks)
+         }
+diff --git a/app/src/main/java/eu/kanade/domain/base/BasePreferences.kt b/app/src/main/java/eu/kanade/domain/base/BasePreferences.kt
+index 1ffcbf6..381f706 100644
+--- a/app/src/main/java/eu/kanade/domain/base/BasePreferences.kt
++++ b/app/src/main/java/eu/kanade/domain/base/BasePreferences.kt
+@@ -37,7 +37,7 @@ class BasePreferences(
+         PRIVATE(MR.strings.ext_installer_private, false),
+     }
+ 
+-    val highQualityRenderer: Preference<Boolean> = preferenceStore.getBoolean("pref_high_quality_renderer_key", false)
++    val highQualityRenderer: Preference<Boolean> = preferenceStore.getBoolean("pref_high_quality_renderer_key", true)
+ 
+     val installationId: Preference<String> = preferenceStore.getString(Preference.appStateKey("installation_id"), "")
+ 
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt
+index 13bdc4e..174c4c3 100644
+--- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt
+@@ -146,7 +146,7 @@ class ReaderPreferences(
+ 
+     val dualPageView: Preference<DualPageView> = preferenceStore.getEnum(
+         "pref_dual_page_view",
+-        DualPageView.NEVER,
++        DualPageView.WIDE,
+     )
+ 
+     // endregion
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
+index 4d13e7b..3ae252d 100644
+--- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
+@@ -630,7 +630,9 @@ open class WebGpuViewer(
+             ReaderPreferences.DualPageView.WIDE -> {
+                 val width = pager.state.width
+                 val height = pager.state.height
+-                width > 0 && height > 0 && width.toFloat() / height > 1f
++                // A book-style foldable's inner screen is near-square, so it counts as wide; the cover
++                // screen and a phone held upright stay single page
++                width > 0 && height > 0 && width.toFloat() / height >= DUAL_PAGE_MIN_ASPECT_RATIO
+             }
+         }
+     }
+@@ -1937,3 +1939,6 @@ open class WebGpuViewer(
+         return false
+     }
+ }
++
++/** Width / height from which "When wide or unfolded" pairs pages. */
++private const val DUAL_PAGE_MIN_ASPECT_RATIO = 0.8f
+diff --git a/i18n/src/commonMain/moko-resources/base/strings.xml b/i18n/src/commonMain/moko-resources/base/strings.xml
+index 7c13807..e0aeb2e 100644
+--- a/i18n/src/commonMain/moko-resources/base/strings.xml
++++ b/i18n/src/commonMain/moko-resources/base/strings.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="app_name" translatable="false">Mihon</string>
++    <string name="app_name" translatable="false">Mihon Fold</string>
+ 
+     <!-- Generic strings -->
+     <string name="on">On</string>
+@@ -549,7 +549,7 @@
+     <string name="pref_dual_page_view">Dual page view</string>
+     <string name="dual_page_view_never">Never</string>
+     <string name="dual_page_view_always">Always</string>
+-    <string name="dual_page_view_wide">When wide</string>
++    <string name="dual_page_view_wide">When wide or unfolded</string>
+     <string name="pref_continuous_minwidth">Min width</string>
+     <string name="pref_continuous_gap">Gap</string>
+     <string name="pref_image_filters">Image filters</string>

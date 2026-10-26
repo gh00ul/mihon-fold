@@ -1,0 +1,8 @@
+# Never commit the signing kit
+secrets-do-not-upload/
+*.jks
+*.keystore
+keystore.properties
+KEYSTORE_BASE64.txt
+KEY_PASSWORD.txt
+*.zip

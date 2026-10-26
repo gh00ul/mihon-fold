@@ -1,0 +1,101 @@
+name: Build Mihon Fold
+
+on:
+  # Checks Mihon's main branch every day and builds only when something changed
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+    inputs:
+      mihon_ref:
+        description: Mihon branch, tag or commit to build
+        default: main
+  # Rebuilds when you change the patch or this workflow
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: mod
+
+      - name: Checkout Mihon
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ inputs.mihon_ref || 'main' }}
+          path: mihon
+
+      - name: Skip if this Mihon commit is already built
+        id: check
+        run: |
+          sha=$(git -C mihon rev-parse --short=7 HEAD)
+          patch=$(sha256sum mod/mihon-fold.patch | cut -c1-6)
+          version=$(grep -oP 'versionName = "\K[^"]+' mihon/app/build.gradle.kts)
+          tag="v${version}-${sha}-p${patch}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Already built $tag, nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply fold patch
+        if: steps.check.outputs.skip != 'true'
+        working-directory: mihon
+        run: git apply --whitespace=nowarn ../mod/mihon-fold.patch
+
+      - name: Set up signing
+        if: steps.check.outputs.skip != 'true'
+        working-directory: mihon
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Add the KEYSTORE_BASE64 and KEY_PASSWORD repository secrets first"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/mihon-fold.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=mihonfold\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/mihon-fold.jks" "$KEY_PASSWORD" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Set up JDK
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version-file: mihon/.github/.java-version
+          distribution: temurin
+
+      - name: Set up Gradle
+        if: steps.check.outputs.skip != 'true'
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Build APK
+        if: steps.check.outputs.skip != 'true'
+        working-directory: mihon
+        run: ./gradlew assembleFoss -Pdist=foss -Penable-updater=false
+
+      - name: Publish release
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          tag="${{ steps.check.outputs.tag }}"
+          apk="MihonFold-${tag}-arm64.apk"
+          cp mihon/app/build/outputs/apk/foss/app-arm64-v8a-foss.apk "$apk"
+          gh release create "$tag" "$apk" -R "$GITHUB_REPOSITORY" --latest \
+            --title "Mihon Fold $tag" \
+            --notes "Built from mihonapp/mihon@${{ steps.check.outputs.sha }} with the fold patch."
