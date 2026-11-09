@@ -1,5 +1,5 @@
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
-index cdf2c2c..499ebca 100644
+index 797416e..0993267 100644
 --- a/app/build.gradle.kts
 +++ b/app/build.gradle.kts
 @@ -89,7 +89,7 @@ android {
@@ -25,7 +25,7 @@ index 1ffcbf6..381f706 100644
      val installationId: Preference<String> = preferenceStore.getString(Preference.appStateKey("installation_id"), "")
  
 diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt
-index 13bdc4e..174c4c3 100644
+index 06eefc8..edb5ccd 100644
 --- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt
 +++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/setting/ReaderPreferences.kt
 @@ -146,7 +146,7 @@ class ReaderPreferences(
@@ -37,30 +37,58 @@ index 13bdc4e..174c4c3 100644
      )
  
      // endregion
-diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
-index 4d13e7b..3ae252d 100644
---- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
-+++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
-@@ -630,7 +630,9 @@ open class WebGpuViewer(
-             ReaderPreferences.DualPageView.WIDE -> {
-                 val width = pager.state.width
-                 val height = pager.state.height
--                width > 0 && height > 0 && width.toFloat() / height > 1f
-+                // A book-style foldable's inner screen is near-square, so it counts as wide; the cover
-+                // screen and a phone held upright stay single page
-+                width > 0 && height > 0 && width.toFloat() / height >= DUAL_PAGE_MIN_ASPECT_RATIO
-             }
-         }
-     }
-@@ -1937,3 +1939,6 @@ open class WebGpuViewer(
-         return false
-     }
- }
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/FoldSpread.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/FoldSpread.kt
+new file mode 100644
+index 0000000..7e94ea1
+--- /dev/null
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/FoldSpread.kt
+@@ -0,0 +1,14 @@
++package eu.kanade.tachiyomi.ui.reader.viewer.webgpu
 +
 +/** Width / height from which "When wide or unfolded" pairs pages. */
 +private const val DUAL_PAGE_MIN_ASPECT_RATIO = 0.8f
++
++/**
++ * Whether a screen of this size is wide enough for two-page spreads. A book-style foldable's inner
++ * screen is near-square, so it counts as wide; the cover screen and a phone held upright stay single page.
++ */
++internal fun isWideForSpread(width: Number, height: Number): Boolean {
++    val w = width.toFloat()
++    val h = height.toFloat()
++    return w > 0f && h > 0f && w / h >= DUAL_PAGE_MIN_ASPECT_RATIO
++}
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
+index 19cd8e5..1741867 100644
+--- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewer.kt
+@@ -663,11 +663,7 @@ open class WebGpuViewer(
+         return when (webgpuPaged.page.dualPageView) {
+             ReaderPreferences.DualPageView.NEVER -> false
+             ReaderPreferences.DualPageView.ALWAYS -> true
+-            ReaderPreferences.DualPageView.WIDE -> {
+-                val width = viewerState.width
+-                val height = viewerState.height
+-                width > 0 && height > 0 && width.toFloat() / height > 1f
+-            }
++            ReaderPreferences.DualPageView.WIDE -> isWideForSpread(viewerState.width, viewerState.height)
+         }
+     }
+ 
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewerSettings.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewerSettings.kt
+index bccc52d..8d3e3a8 100644
+--- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewerSettings.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webgpu/WebGpuViewerSettings.kt
+@@ -97,7 +97,7 @@ internal fun WebGpuViewerSettings(viewModel: ReaderSettingsViewModel) {
+     val isDual = isPaged && when (dualPageView) {
+         ReaderPreferences.DualPageView.NEVER -> false
+         ReaderPreferences.DualPageView.ALWAYS -> true
+-        ReaderPreferences.DualPageView.WIDE -> configuration.screenWidthDp > configuration.screenHeightDp
++        ReaderPreferences.DualPageView.WIDE -> isWideForSpread(configuration.screenWidthDp, configuration.screenHeightDp)
+     }
+     val isSingle = isPaged && !isDual
+ 
 diff --git a/i18n/src/commonMain/moko-resources/base/strings.xml b/i18n/src/commonMain/moko-resources/base/strings.xml
-index 7c13807..e0aeb2e 100644
+index 187b916..636d35c 100644
 --- a/i18n/src/commonMain/moko-resources/base/strings.xml
 +++ b/i18n/src/commonMain/moko-resources/base/strings.xml
 @@ -1,6 +1,6 @@
@@ -71,7 +99,7 @@ index 7c13807..e0aeb2e 100644
  
      <!-- Generic strings -->
      <string name="on">On</string>
-@@ -549,7 +549,7 @@
+@@ -543,7 +543,7 @@
      <string name="pref_dual_page_view">Dual page view</string>
      <string name="dual_page_view_never">Never</string>
      <string name="dual_page_view_always">Always</string>
