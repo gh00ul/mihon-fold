@@ -1,5 +1,7 @@
 # Mihon Fold
 
+> **TL;DR:** Mihon with auto two-page spreads on foldables, rebuilt daily.
+
 Mihon with automatic two-page spreads when a book-style foldable is unfolded, and one page when it's folded. It installs as a separate app, "Mihon Fold" (`app.mihon.fold`), with no telemetry.
 
 ## How updates work
